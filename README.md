@@ -100,6 +100,51 @@ Two results worth noting:
 reproducing Botter et al.'s observation (their Figs. 11-12) that the
 higher frequencies are what actually resolve the deformation structure.
 
+## Traveltime tomography (closing the loop)
+
+`tomography.py` treats the synthetic traveltimes as *observed data* and
+inverts them back to a velocity model, the way a real refraction survey
+would be processed -- answering how much of what each rock-physics model
+puts into Vp a survey could actually recover.
+
+- survey: 15 surface shots, receivers every 3rd surface node
+- forward: eikonal per shot; rays back-traced down grad(T) with bilinear
+  gradient interpolation, accumulating path length per 300 m cell
+- update: damped, Laplacian-smoothed LSQR on slowness, with the
+  regularisation scaled to the RMS entry of G (its entries are ray path
+  lengths in metres, so an absolute weight is meaningless) and a
+  backtracking line search so every iteration is guaranteed to reduce
+  the residual
+- all three models start from the *same* plain linear v(z) gradient
+
+```
+python tomography.py
+```
+
+The residual drops from ~0.9 s to 10-19 ms, and the recovery splits
+cleanly in two:
+
+| | 1D compaction trend | lateral anomaly (shear bands) |
+|---|---|---|
+| SSPX + Botter | r = +0.988, 78 m/s error | r = +0.121, amplitude x3.36 |
+| IG-FEM + Botter | r = +0.989, 84 m/s error | r = +0.116, amplitude x2.71 |
+| Hertz-Mindlin | r = +0.988, 95 m/s error | r = +0.254, amplitude x1.67 |
+
+**The compaction trend comes back almost exactly; the shear bands do
+not come back at all.** Worse than simply missing them, the inversion
+has to put *some* lateral structure in to fit the data, and with the
+thin deep ray coverage it invents blocky anomalies at 2-3x the true
+amplitude in the wrong places. The bands that imaged so cleanly in the
+reflection section (previous step) are invisible to first-arrival
+tomography -- the same structure, two observables, opposite verdicts.
+
+What does survive is the model-level difference: Hertz-Mindlin's slow
+near-surface layer is still clearly separated from the two Botter
+profiles after inversion (`fig_tomo_recovery.png`, right panel), and
+the pairwise correlation between recovered models stays well below the
+correlation between the true ones (+0.47/+0.52 vs +0.80/+0.77), i.e.
+inversion blurs the models together but does not erase which is which.
+
 ## Why per-contact, not per-particle
 
 Hertz-Mindlin contact stiffness is a property of a *contact* (a pair
