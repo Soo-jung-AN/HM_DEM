@@ -19,14 +19,18 @@ compaction) DEM test, 17,694 particles. `igfem_assembly.py` /
 `traveltime_compare.py` can reproduce the Botter et al. Vp field here
 too, without depending on either sibling repo at runtime.
 
-## Traveltime comparison
+## Traveltime comparison (three routes)
 
-`traveltime_compare.py` runs the real 2D IG-FEM solve + Botter et al.
-(2014) rock physics AND the Hertz-Mindlin pipeline on the exact same
-particle data, grids both resulting Vp fields onto a common regular
-grid, and solves the eikonal equation (`scikit-fmm`) from a single
-surface source to get first-arrival P traveltimes -- the kind of
-quantity an actual refraction survey measures.
+`traveltime_compare.py` builds **three** Vp fields from the *same* DEM
+deformation and pushes each through the same eikonal solve, so the
+models can be compared on an actually observable quantity rather than
+on the Vp fields themselves:
+
+| route | strain | Vp from |
+|---|---|---|
+| SSPX + Botter | nearest-neighbor local deformation gradient (what Botter et al. themselves used, via Cardozo & Allmendinger's SSPX) | rock_physics.py Eqs. 1-4 |
+| IG-FEM + Botter | global mass-matrix FEM projection (this project's method) | rock_physics.py Eqs. 1-4 |
+| Hertz-Mindlin | none — contact mechanics only | K, G from contact stiffness |
 
 ```
 pip install scikit-fmm
@@ -34,19 +38,32 @@ python traveltime_compare.py
 python make_traveltime_figures.py
 ```
 
-Even though both Vp fields come from the identical DEM deformation,
-the two rock-physics models disagree enough that the predicted
-traveltimes diverge substantially: **up to ~3.55 s difference at the
-far offset** (`fig_tt_surface_curve.png`), because Hertz-Mindlin's
-mean Vp (~2762 m/s, and much lower still near the low-pressure surface)
-is well below Botter's near-uniform ~3000-5000 m/s field (Botter's
-curve is anchored to a fixed `Vp_ini`, while HM's Vp is generated from
-scratch via contact stiffness and is far more sensitive to the
-low-confining-pressure, low-coordination surface layer). This is a
-concrete, observable illustration of why the rock-physics model choice
-matters for anything downstream that uses these Vp fields (traveltime
-tomography, migration velocity models, etc.) -- see `fig_tt_maps.png`
-for the full 2D picture.
+Both Botter routes get an identical **depth-dependent compaction trend**
+for the pre-strain properties (Vp_ini 1.8 km/s at the free surface to
+4.0 km/s at the base, phi_ini 0.35 to 0.15), assigned in the undeformed
+configuration the way Botter et al. assign properties before faulting.
+That trend matters: with a single homogeneous `Vp_ini` the velocity
+field has essentially no vertical gradient, so there are no diving
+waves and the t-x curve collapses to a featureless straight line.
+
+Results (shot at mid-line on the free surface, two-sided spread):
+
+- **SSPX vs IG-FEM: the strain fields barely correlate point-by-point
+  (r = +0.055), yet the traveltimes agree to within 0.14 s** (mean
+  +0.053 s). Traveltime is a path integral, so it averages out the
+  pointwise disagreement between a local least-squares estimator and a
+  globally smoothed FEM projection — the two strain methods are
+  effectively interchangeable *for this observable*, even though their
+  per-particle strain maps look quite different.
+- **Hertz-Mindlin runs ~0.8 s slow throughout** (max 1.19 s), because
+  it generates Vp from scratch via contact stiffness and so predicts a
+  genuinely soft, slow near-surface layer (down to ~380 m/s) where
+  confining pressure and coordination number are lowest. Botter's curve
+  is anchored to `Vp_ini` and can only move it by +/-25%, so it never
+  gets that soft.
+
+See `fig_tt_maps.png` (Vp and traveltime fields at true 1:1 aspect) and
+`fig_tt_surface_curve.png` (two-sided t-x curve and residuals).
 
 ## Why per-contact, not per-particle
 
