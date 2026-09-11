@@ -12,7 +12,41 @@ bulk and shear moduli (K, G) -> Vp = sqrt((K+4G/3)/rho), Vs = sqrt(G/rho).
 Sample data (`data/`) is copied from
 [Soo-jung-AN/IG-FEM](https://github.com/Soo-jung-AN/IG-FEM): particle
 positions and radii from a horizontal-shortening (biaxial-style
-compaction) DEM test, 17,694 particles.
+compaction) DEM test, 17,694 particles. `igfem_assembly.py` /
+`igfem_preprocessing.py` (also copied from that repo) and
+`rock_physics.py` (copied from
+[3D_IG-FEM](https://github.com/Soo-jung-AN/3D_IG-FEM)) are included so
+`traveltime_compare.py` can reproduce the Botter et al. Vp field here
+too, without depending on either sibling repo at runtime.
+
+## Traveltime comparison
+
+`traveltime_compare.py` runs the real 2D IG-FEM solve + Botter et al.
+(2014) rock physics AND the Hertz-Mindlin pipeline on the exact same
+particle data, grids both resulting Vp fields onto a common regular
+grid, and solves the eikonal equation (`scikit-fmm`) from a single
+surface source to get first-arrival P traveltimes -- the kind of
+quantity an actual refraction survey measures.
+
+```
+pip install scikit-fmm
+python traveltime_compare.py
+python make_traveltime_figures.py
+```
+
+Even though both Vp fields come from the identical DEM deformation,
+the two rock-physics models disagree enough that the predicted
+traveltimes diverge substantially: **up to ~3.55 s difference at the
+far offset** (`fig_tt_surface_curve.png`), because Hertz-Mindlin's
+mean Vp (~2762 m/s, and much lower still near the low-pressure surface)
+is well below Botter's near-uniform ~3000-5000 m/s field (Botter's
+curve is anchored to a fixed `Vp_ini`, while HM's Vp is generated from
+scratch via contact stiffness and is far more sensitive to the
+low-confining-pressure, low-coordination surface layer). This is a
+concrete, observable illustration of why the rock-physics model choice
+matters for anything downstream that uses these Vp fields (traveltime
+tomography, migration velocity models, etc.) -- see `fig_tt_maps.png`
+for the full 2D picture.
 
 ## Why per-contact, not per-particle
 
