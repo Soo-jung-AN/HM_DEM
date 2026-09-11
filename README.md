@@ -65,6 +65,41 @@ Results (shot at mid-line on the free surface, two-sided spread):
 See `fig_tt_maps.png` (Vp and traveltime fields at true 1:1 aspect) and
 `fig_tt_surface_curve.png` (two-sided t-x curve and residuals).
 
+## Synthetic seismic section (Botter step 3, lightweight)
+
+`synthetic_seismic.py` completes the Botter et al. workflow in its
+lightweight form. They used a ray-based PSDM simulator (SeisRoX) and
+noted that with a "perfect PSDM filter" -- all reflector dips
+illuminated -- the result approximates plain 1D convolution, which is
+what is done here, per trace:
+
+```
+Z = rho * Vp            ->  t(z) = 2 * integral dz/Vp
+R = dZ / (2 Z) in time  ->  convolve with a zero-phase Ricker wavelet
+                        ->  map back to depth
+python synthetic_seismic.py
+```
+
+Two results worth noting:
+
+- **Traveltime and reflectivity disagree about whether SSPX and IG-FEM
+  are the same thing.** Their traveltimes matched to 0.14 s, but their
+  synthetic sections are *uncorrelated* (r = +0.011, relative RMS
+  difference 1.09). Reflectivity is a derivative of impedance, so it
+  amplifies exactly the small-scale pointwise disagreement (strain
+  r = +0.055) that the traveltime path integral averages away. Which
+  strain estimator you pick is irrelevant for a velocity model and
+  decisive for a reflection image.
+- **The shear bands are only imaged through the strain route.** Both
+  Botter sections show the conjugate X-shaped bands as coherent
+  reflectivity; the Hertz-Mindlin section is essentially speckle, since
+  its impedance is driven by coordination number and confining pressure,
+  which do not localise on the shear bands the way finite strain does.
+
+`fig_seismic_frequency.png` sweeps 10/20/30/40 Hz on the IG-FEM route,
+reproducing Botter et al.'s observation (their Figs. 11-12) that the
+higher frequencies are what actually resolve the deformation structure.
+
 ## Why per-contact, not per-particle
 
 Hertz-Mindlin contact stiffness is a property of a *contact* (a pair

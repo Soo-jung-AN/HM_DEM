@@ -104,12 +104,12 @@ def igfem_vol_strain(undeformed_cood, deformed_cood):
     return F11 * F22 - F21 * F12 - 1.0
 
 
-def botter_vp(vol, undeformed_cood):
+def botter_vp_rho(vol, undeformed_cood):
     """Botter et al. (2014) Eqs. 1-4 on a volumetric strain field, with the
-    depth-trended initial properties. Returns Vp in m/s."""
+    depth-trended initial properties. Returns (Vp in m/s, rho in kg/m3)."""
     phi_ini, rho_g, Vp_ini = initial_properties(undeformed_cood)
-    _, _, Vp_kms, _, _ = synthesize_vpvs(vol, phi_ini, rho_g, Vp_ini)
-    return Vp_kms * 1000.0
+    _, rho, Vp_kms, _, _ = synthesize_vpvs(vol, phi_ini, rho_g, Vp_ini)
+    return Vp_kms * 1000.0, rho
 
 
 def grid_field(pos, values, GX, GY, mask=None):
@@ -132,15 +132,24 @@ def main():
           f"IG-FEM: mean {vol_igfem.mean():+.4f}  "
           f"corr {np.corrcoef(vol_sspx, vol_igfem)[0,1]:+.3f}")
 
-    models = {
-        "SSPX + Botter": botter_vp(vol_sspx, undeformed_cood),
-        "IG-FEM + Botter": botter_vp(vol_igfem, undeformed_cood),
-    }
+    vp_sspx, rho_sspx = botter_vp_rho(vol_sspx, undeformed_cood)
+    vp_igfem, rho_igfem = botter_vp_rho(vol_igfem, undeformed_cood)
     out_hm = run_hm(deformed_cood, rad)
-    models["Hertz-Mindlin"] = out_hm["Vp"]
+
+    models = {
+        "SSPX + Botter": vp_sspx,
+        "IG-FEM + Botter": vp_igfem,
+        "Hertz-Mindlin": out_hm["Vp"],
+    }
+    densities = {
+        "SSPX + Botter": rho_sspx,
+        "IG-FEM + Botter": rho_igfem,
+        "Hertz-Mindlin": out_hm["rho"],
+    }
 
     for name, vp in models.items():
-        print(f"{name:>16s} Vp (m/s): {np.nanmin(vp):7.0f} / {np.nanmean(vp):7.0f} / {np.nanmax(vp):7.0f}")
+        print(f"{name:>16s} Vp (m/s): {np.nanmin(vp):7.0f} / {np.nanmean(vp):7.0f} / {np.nanmax(vp):7.0f}"
+              f"   rho {np.nanmean(densities[name]):6.0f} kg/m3")
 
     # common grid, on the deformed (observed) geometry
     xmin, xmax = deformed_cood[:, 0].min(), deformed_cood[:, 0].max()
@@ -165,11 +174,11 @@ def main():
     phi = np.ones_like(GX)
     phi[src_i, src_j] = -1
 
-    vp_grids, tts = {}, {}
+    vp_grids, rho_grids, tts = {}, {}, {}
     for name, vp in models.items():
         mask = out_hm["valid"] if name == "Hertz-Mindlin" else None
-        pos = deformed_cood
-        vp_grids[name] = grid_field(pos, vp, GX, GY, mask=mask)
+        vp_grids[name] = grid_field(deformed_cood, vp, GX, GY, mask=mask)
+        rho_grids[name] = grid_field(deformed_cood, densities[name], GX, GY, mask=mask)
         tts[name] = skfmm.travel_time(phi, vp_grids[name], dx=dx)
         print(f"{name:>16s} max traveltime {np.ma.array(tts[name], mask=~inside).max():.3f} s")
 
@@ -177,6 +186,7 @@ def main():
              gx=gx, gy=gy, inside=inside, src_x=src_x, src_y=src_y,
              names=np.array(list(models.keys())),
              vp_grids=np.array([vp_grids[n] for n in models]),
+             rho_grids=np.array([rho_grids[n] for n in models]),
              tts=np.array([tts[n] for n in models]),
              vol_sspx=vol_sspx, vol_igfem=vol_igfem)
     print("saved traveltime_compare.npz")
